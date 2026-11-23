@@ -1,4 +1,4 @@
-# ⚡ Energy Monitoring System
+# ⚡Energy Management and Efficiency Monitoring System
 ### Machine Shop Efficiency Monitoring — PWA
 
 A full-stack Progressive Web Application for real-time energy monitoring, historical analysis, and intelligent alerting for machine shop environments.

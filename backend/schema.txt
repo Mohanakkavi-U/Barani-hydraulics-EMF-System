@@ -1,0 +1,7 @@
+('id', 'int', 'NO', 'PRI', None, 'auto_increment')
+('machine_id', 'int', 'YES', 'MUL', None, '')
+('reading_id', 'int', 'YES', 'MUL', None, '')
+('severity', "enum('critical','warning','info')", 'NO', '', None, '')
+('message', 'text', 'NO', '', None, '')
+('acknowledged', 'tinyint(1)', 'YES', '', '0', '')
+('timestamp', 'timestamp', 'YES', '', 'CURRENT_TIMESTAMP', 'DEFAULT_GENERATED')

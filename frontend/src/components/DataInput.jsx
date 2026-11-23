@@ -2,14 +2,24 @@ import { useState } from "react";
 
 const FIELDS = [
   {
-    key: "voltage_v",
-    label: "Voltage",
+    key: "voltage_ln_v",
+    label: "Voltage LN",
     unit: "V",
     placeholder: "220.0",
     hint: "Normal range: 210 – 240 V",
     color: "cyan",
     icon: "⚡",
     min: 0, max: 500,
+  },
+  {
+    key: "voltage_ll_v",
+    label: "Voltage LL",
+    unit: "V",
+    placeholder: "415.0",
+    hint: "Normal range: 380 – 440 V",
+    color: "cyan",
+    icon: "⚡",
+    min: 0, max: 600,
   },
   {
     key: "current_a",
@@ -22,26 +32,6 @@ const FIELDS = [
     min: 0, max: 1000,
   },
   {
-    key: "power_kw",
-    label: "Power",
-    unit: "kW",
-    placeholder: "3.3",
-    hint: "Active power consumed",
-    color: "purple",
-    icon: "⊛",
-    min: 0, max: 10000,
-  },
-  {
-    key: "energy_kwh",
-    label: "Energy Consumption",
-    unit: "kWh",
-    placeholder: "0.055",
-    hint: "Cumulative energy for this interval",
-    color: "green",
-    icon: "◈",
-    min: 0, max: 100000,
-  },
-  {
     key: "power_factor",
     label: "Power Factor",
     unit: "PF",
@@ -52,21 +42,20 @@ const FIELDS = [
     min: 0, max: 1,
   },
   {
-    key: "frequency_hz",
-    label: "Frequency",
-    unit: "Hz",
-    placeholder: "50.0",
-    hint: "Normal: 49.8 – 50.2 Hz",
-    color: "teal",
-    icon: "∿",
-    min: 0, max: 100,
+    key: "time_h",
+    label: "Time Interval",
+    unit: "h",
+    placeholder: "1.0",
+    hint: "Time in hours",
+    color: "blue",
+    icon: "◷",
+    min: 0, max: 24,
   },
 ];
 
 const EMPTY = {
   machine_id: "",
-  voltage_v: "", current_a: "", power_kw: "",
-  energy_kwh: "", power_factor: "", frequency_hz: "",
+  voltage_ln_v: "", voltage_ll_v: "", current_a: "", power_factor: "", time_h: "",
   notes: "",
 };
 
@@ -92,6 +81,19 @@ export default function DataInput({ onSubmit, loading, machines }) {
   const [touched, setTouched] = useState({});
   const [submitted, setSubmitted] = useState(false);
 
+  const calcPower = () => {
+    const v = parseFloat(form.voltage_ln_v) || 0;
+    const c = parseFloat(form.current_a) || 0;
+    const pf = parseFloat(form.power_factor) || 0;
+    return (v * c * pf) / 1000;
+  };
+
+  const calcEnergy = () => {
+    const p = calcPower();
+    const t = parseFloat(form.time_h) || 0;
+    return p * t;
+  };
+
   const change = (key, val) => {
     setForm((f) => ({ ...f, [key]: val }));
     if (errors[key]) setErrors((e) => ({ ...e, [key]: null }));
@@ -108,9 +110,15 @@ export default function DataInput({ onSubmit, loading, machines }) {
 
     const payload = {
       machine_id: parseInt(form.machine_id),
+      voltage_ln_v: parseFloat(form.voltage_ln_v),
+      voltage_ll_v: parseFloat(form.voltage_ll_v),
+      current_a: parseFloat(form.current_a),
+      power_factor: parseFloat(form.power_factor),
+      power_kw: calcPower(),
+      energy_kwh: calcEnergy(),
+      frequency_hz: 50.0, // Default since it was removed from inputs
+      notes: form.notes
     };
-    FIELDS.forEach(({ key }) => { payload[key] = parseFloat(form[key]); });
-    payload.notes = form.notes;
 
     await onSubmit(payload);
     setForm(EMPTY);
@@ -122,13 +130,12 @@ export default function DataInput({ onSubmit, loading, machines }) {
 
   const autofill = () => {
     setForm({
-      machine_id: machines.length > 0 ? machines[0].id : "",
-      voltage_v: (220 + Math.random() * 10 - 5).toFixed(1),
+      machine_id: machines.length > 0 ? String(machines[0].id) : "",
+      voltage_ln_v: (220 + Math.random() * 10 - 5).toFixed(1),
+      voltage_ll_v: (415 + Math.random() * 15 - 7).toFixed(1),
       current_a: (10 + Math.random() * 20).toFixed(2),
-      power_kw:  (2 + Math.random() * 5).toFixed(2),
-      energy_kwh:(0.01 + Math.random() * 0.2).toFixed(4),
       power_factor: (0.85 + Math.random() * 0.15).toFixed(3),
-      frequency_hz: (49.8 + Math.random() * 0.4).toFixed(2),
+      time_h: (1 + Math.random() * 3).toFixed(2),
       notes: "Auto-filled test data",
     });
     setErrors({});
@@ -138,8 +145,8 @@ export default function DataInput({ onSubmit, loading, machines }) {
     const v = parseFloat(form[key]);
     if (!form[key] || isNaN(v)) return "";
     if (key === "power_factor") return v < 0.85 ? "error" : v < 0.95 ? "warning" : "";
-    if (key === "frequency_hz") return v < 49.5 || v > 50.5 ? "error" : v < 49.8 || v > 50.2 ? "warning" : "";
-    if (key === "voltage_v") return v < 200 || v > 250 ? "error" : v < 210 || v > 240 ? "warning" : "";
+    if (key === "voltage_ln_v") return v < 200 || v > 250 ? "error" : v < 210 || v > 240 ? "warning" : "";
+    if (key === "voltage_ll_v") return v < 380 || v > 450 ? "error" : v < 400 || v > 430 ? "warning" : "";
     return "";
   };
 
@@ -147,7 +154,7 @@ export default function DataInput({ onSubmit, loading, machines }) {
     <div>
       <div className="page-header">
         <div className="page-title">Data <span>Entry</span></div>
-        <div className="page-subtitle">Manual parameter input · Real-time validation</div>
+        <div className="page-subtitle">Manual parameter input · Auto calculation</div>
       </div>
 
       <div className="input-layout" style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20 }}>
@@ -155,14 +162,14 @@ export default function DataInput({ onSubmit, loading, machines }) {
         <div className="card">
           <div className="card-header">
             <div className="card-title">⊕ New Reading</div>
-            <button className="btn btn-ghost" onClick={autofill} style={{ fontSize: 11, padding: "6px 14px" }}>
+            <button className="btn btn-ghost" onClick={autofill} style={{ fontSize: 14, padding: "6px 14px", type: "button" }}>
               ⟳ Auto-fill Test Data
             </button>
           </div>
 
           <form onSubmit={handleSubmit}>
-            <div className="form-group" style={{ marginBottom: 24 }}>
-              <label className="form-label" style={{ fontSize: 14, fontWeight: 700 }}>1. Select Machine</label>
+            <div className="form-group" style={{ marginBottom: 32 }}>
+              <label className="form-label" style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)" }}>1. Select Machine</label>
               <select 
                 className="form-input" 
                 value={form.machine_id}
@@ -178,19 +185,24 @@ export default function DataInput({ onSubmit, loading, machines }) {
               >
                 <option value="">-- Choose Machine --</option>
                 {machines.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
+                  <option key={m.id} value={String(m.id)}>{m.name}</option>
                 ))}
               </select>
               {touched.machine_id && errors.machine_id && <div className="form-hint error">⚠ {errors.machine_id}</div>}
             </div>
 
-            <label className="form-label" style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, display: "block" }}>2. Enter Parameters</label>
+            <label className="form-label" style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 16, display: "block" }}>2. Enter Parameters</label>
             <div className="form-grid">
               {FIELDS.map((field) => (
                 <div className="form-group" key={field.key}>
-                  <label className="form-label">
-                    <span style={{ marginRight: 6, color: `var(--accent-${field.color})` }}>{field.icon}</span>
-                    {field.label}
+                  <label className="form-label" style={{ display: "flex", justifyContent: "space-between", fontSize: 15 }}>
+                    <span>
+                      <span style={{ marginRight: 8, color: `var(--accent-${field.color})`, fontSize: 16 }}>{field.icon}</span>
+                      {field.label}
+                    </span>
+                    <span style={{ fontSize: 14, color: "var(--text-muted)", marginLeft: "auto", fontWeight: 700 }}>
+                      IN {field.unit}
+                    </span>
                   </label>
                   <div className="form-input-wrap">
                     <input
@@ -201,13 +213,16 @@ export default function DataInput({ onSubmit, loading, machines }) {
                       value={form[field.key]}
                       onChange={(e) => change(field.key, e.target.value)}
                       onBlur={() => blur(field.key)}
-                      style={
-                        touched[field.key] && errors[field.key]
+                      style={{
+                        padding: "14px 16px",
+                        fontSize: "18px",
+                        fontWeight: 700,
+                        ...(touched[field.key] && errors[field.key]
                           ? { borderColor: "var(--accent-red)" }
                           : form[field.key] && !errors[field.key]
                           ? { borderColor: "var(--accent-green)" }
-                          : {}
-                      }
+                          : {})
+                      }}
                     />
                     <span className="form-unit">{field.unit}</span>
                   </div>
@@ -247,28 +262,54 @@ export default function DataInput({ onSubmit, loading, machines }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Live Preview */}
           <div className="card">
-            <div className="card-title" style={{ marginBottom: 14 }}>◈ Preview</div>
+            <div className="card-title" style={{ marginBottom: 14 }}>◈ Preview & Formulas</div>
+            
+            {/* Input Variables */}
             {FIELDS.map((f) => (
-              <div key={f.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: "1px solid var(--border-dim)" }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)", letterSpacing: 1 }}>{f.label.toUpperCase()}</span>
-                <span style={{ fontFamily: "var(--font-display)", fontSize: 15, color: form[f.key] ? `var(--accent-${f.color})` : "var(--text-muted)", fontWeight: 600 }}>
-                  {form[f.key] || "—"} <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{f.unit}</span>
+              <div key={f.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--border-dim)" }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--text-muted)", letterSpacing: 1.5, fontWeight: 700 }}>{f.label.toUpperCase()}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 18, color: form[f.key] ? `var(--accent-${f.color})` : "var(--text-muted)", fontWeight: 700 }}>
+                  {form[f.key] || "0"} <span style={{ fontSize: 14, color: "var(--text-muted)" }}>{f.unit}</span>
                 </span>
               </div>
             ))}
+
+            <div style={{ margin: "14px 0", borderBottom: "1px dashed var(--border-dim)" }}></div>
+
+            {/* Calculated Values */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid var(--border-dim)" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 15, color: "var(--accent-purple)", letterSpacing: 1.5, fontWeight: 800 }}>
+                POWER
+                <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 4, fontWeight: 400 }}>(V × A × PF) / 1000</div>
+              </span>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--accent-purple)", fontWeight: 800 }}>
+                {calcPower().toFixed(3)} <span style={{ fontSize: 16, color: "var(--text-muted)", marginLeft: 2 }}>kW</span>
+              </span>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0" }}>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 15, color: "var(--accent-green)", letterSpacing: 1.5, fontWeight: 800 }}>
+                ENERGY
+                <div style={{ fontSize: 14, color: "var(--text-muted)", marginTop: 4, fontWeight: 400 }}>Power (kW) × Time (h)</div>
+              </span>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: 24, color: "var(--accent-green)", fontWeight: 800 }}>
+                {calcEnergy().toFixed(4)} <span style={{ fontSize: 16, color: "var(--text-muted)", marginLeft: 2 }}>kWh</span>
+              </span>
+            </div>
+
           </div>
 
           {/* Threshold Reference */}
           <div className="card">
             <div className="card-title" style={{ marginBottom: 12 }}>⚑ Threshold Ref</div>
             {[
-              { label: "Voltage", ok: "210–240V", warn: "200–210 / 240–250V", crit: "<200 or >250V" },
+              { label: "Voltage LN", ok: "210–240V", warn: "200–210 / 240–250V", crit: "<200 or >250V" },
+              { label: "Voltage LL", ok: "400–430V", warn: "380–400 / 430–450V", crit: "<380 or >450V" },
               { label: "Power Factor", ok: "≥ 0.95", warn: "0.85–0.95", crit: "< 0.85" },
-              { label: "Frequency", ok: "49.8–50.2Hz", warn: "49.5–49.8 / 50.2–50.5Hz", crit: "Outside 49.5–50.5Hz" },
             ].map((t) => (
               <div key={t.label} style={{ marginBottom: 12 }}>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-secondary)", letterSpacing: 1, marginBottom: 4 }}>{t.label}</div>
-                <div style={{ fontSize: 11, display: "flex", flexDirection: "column", gap: 3 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, color: "var(--text-secondary)", letterSpacing: 1, marginBottom: 4 }}>{t.label}</div>
+                <div style={{ fontSize: 14, display: "flex", flexDirection: "column", gap: 3 }}>
                   <span className="badge badge-ok">OK {t.ok}</span>
                   <span className="badge badge-warn" style={{ width: "fit-content" }}>⚠ {t.warn}</span>
                   <span className="badge badge-crit" style={{ width: "fit-content" }}>✕ {t.crit}</span>

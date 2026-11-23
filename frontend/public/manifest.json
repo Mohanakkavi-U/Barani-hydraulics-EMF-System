@@ -1,0 +1,9 @@
+{
+  "name": "Energy Monitoring System",
+  "short_name": "EnergyMonitor",
+  "description": "Real-time machine shop efficiency monitoring",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0a0b10",
+  "theme_color": "#00d4ff"
+}

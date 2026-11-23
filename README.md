@@ -34,12 +34,9 @@ energy-monitor/
 
 ## 🚀 Setup
 
-### 1. MySQL Database
+### 1. Database
 
-```sql
--- Run schema.sql in your MySQL client:
-mysql -u root -p < database/schema.sql
-```
+The application uses **MySQL**. Configure your connection details in `backend/.env`. The backend will automatically create all necessary tables the first time it starts.
 
 ### 2. Backend (Python FastAPI)
 
@@ -54,15 +51,12 @@ source venv/bin/activate        # Linux/Mac
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure database
-cp .env.example .env
-nano .env                       # Fill in DB_USER, DB_PASSWORD etc.
-
 # Start server
 python main.py
 # → API running at http://localhost:8000
 # → Docs at    http://localhost:8000/docs
 ```
+
 
 ### 3. Frontend (React)
 
@@ -142,7 +136,7 @@ Full interactive API docs: **http://localhost:8000/docs**
 |----------|----------------------------------|
 | Frontend | React 18, Vite, CSS Variables    |
 | Backend  | Python 3.10+, FastAPI, Uvicorn   |
-| Database | MySQL 8+                         |
+| Database | MySQL                            |
 | Charts   | Pure SVG (no chart library deps) |
 | PWA      | Web App Manifest                 |
 
@@ -166,3 +160,6 @@ Works on desktop (Windows/Mac/Linux) and mobile.
 
 **Add more machines:**  
 Add a `machine_id` FK column to `readings` and filter by machine in queries.
+
+
+//192.168.0.50

@@ -4,6 +4,8 @@ import DataInput from "./components/DataInput";
 import Historical from "./components/Historical";
 import Alerts from "./components/Alerts";
 import Sidebar from "./components/Sidebar";
+import MachineUserSettings from "./components/MachineUserSettings";
+import AnalyticsReport from "./components/AnalyticsReport";
 import "./App.css";
 
 const API_BASE = "http://localhost:8000/api";
@@ -16,6 +18,13 @@ export default function App() {
   const [latestReading, setLatestReading] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [theme, setTheme] = useState(localStorage.getItem("theme") || "dark");
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+  };
 
   const showToast = (msg, type = "success") => {
     setToast({ msg, type });
@@ -39,10 +48,10 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/readings`);
       if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setReadings(data);
-        setLatestReading(data.length > 0 ? data[data.length - 1] : null);
+      const json = await res.json();
+      if (json && json.data) {
+        setReadings(json.data);
+        setLatestReading(json.data.length > 0 ? json.data[0] : null);
       }
     } catch (e) {
       console.error("Fetch readings failed", e);
@@ -66,12 +75,27 @@ export default function App() {
     fetchMachines();
     fetchReadings();
     fetchAlerts();
-    const interval = setInterval(() => {
-      fetchMachines();
-      fetchReadings();
+    
+    // Connect to WebSocket
+    const ws = new WebSocket("ws://localhost:8000/ws/readings");
+    ws.onmessage = (event) => {
+      const newReading = JSON.parse(event.data);
+      setReadings((prev) => {
+        const next = [newReading, ...prev];
+        return next.slice(0, 50); // Keep live array capped at 50
+      });
+      setLatestReading(newReading);
+    };
+
+    // Lightweight polling specifically for active Alerts
+    const alertInterval = setInterval(() => {
       fetchAlerts();
-    }, 15000);
-    return () => clearInterval(interval);
+    }, 5000);
+
+    return () => {
+      ws.close();
+      clearInterval(alertInterval);
+    };
   }, [fetchReadings, fetchAlerts, fetchMachines]);
 
   const submitReading = async (formData) => {
@@ -122,6 +146,23 @@ export default function App() {
     }
   };
 
+  const acknowledgeAlertsBulk = async (ids) => {
+    try {
+      const res = await fetch(`${API_BASE}/alerts/acknowledge-bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) {
+        await fetchAlerts();
+        showToast(`Acknowledged ${ids.length} alerts`);
+      }
+    } catch (e) {
+      console.error("Bulk acknowledge failed", e);
+      showToast("Failed to acknowledge alerts", "error");
+    }
+  };
+
   const addMachine = async (machineData) => {
     try {
       const res = await fetch(`${API_BASE}/machines`, {
@@ -138,11 +179,53 @@ export default function App() {
     }
   };
 
+  const deleteMachine = async (machineId) => {
+    if (!window.confirm("Are you sure you want to delete this machine? This will also delete all its readings and alerts.")) return;
+    try {
+      const res = await fetch(`${API_BASE}/machines/${machineId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        await fetchMachines();
+        await fetchReadings(); // Deletion cascade in DB might affect readings/alerts
+        await fetchAlerts();
+        showToast("Machine deleted successfully");
+      } else {
+        showToast("Failed to delete machine", "error");
+      }
+    } catch (e) {
+      showToast("Failed to delete machine", "error");
+    }
+  };
+
+  const updateMachineSettings = async (machineId, settingsData) => {
+    try {
+      const res = await fetch(`${API_BASE}/machines/${machineId}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsData),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to update settings");
+      }
+      await fetchMachines();
+      showToast("Settings updated successfully");
+    } catch (e) {
+      showToast(`Update error: ${e.message}`, "error");
+    }
+  };
+
   const unreadAlerts = Array.isArray(alerts) ? alerts.filter((a) => !a.acknowledged).length : 0;
 
   return (
-    <div className="app-shell">
-      <Sidebar activePage={activePage} setActivePage={setActivePage} unreadAlerts={unreadAlerts} />
+    <div className="app-shell" data-theme={theme}>
+      <Sidebar 
+        activePage={activePage} 
+        setActivePage={setActivePage} 
+        unreadAlerts={unreadAlerts} 
+        theme={theme}
+        toggleTheme={toggleTheme}
+      />
       <main className="main-content">
         <div className="page-container">
           {activePage === "dashboard" && (
@@ -153,6 +236,7 @@ export default function App() {
               machines={machines} 
               onToggleStatus={toggleMachineStatus}
               onAddMachine={addMachine}
+              onDeleteMachine={deleteMachine}
             />
           )}
           {activePage === "input" && (
@@ -165,8 +249,21 @@ export default function App() {
           {activePage === "historical" && (
             <Historical readings={readings} machines={machines} />
           )}
+          {activePage === "settings" && (
+            <MachineUserSettings 
+              machines={machines} 
+              onUpdateSettings={updateMachineSettings} 
+            />
+          )}
           {activePage === "alerts" && (
-            <Alerts alerts={alerts} onAcknowledge={acknowledgeAlert} />
+            <Alerts 
+              alerts={alerts} 
+              onAcknowledge={acknowledgeAlert} 
+              onAcknowledgeBulk={acknowledgeAlertsBulk} 
+            />
+          )}
+          {activePage === "analytics" && (
+            <AnalyticsReport />
           )}
         </div>
       </main>
